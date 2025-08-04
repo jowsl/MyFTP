@@ -1,0 +1,22 @@
+# Configurações do VS Code
+.vscode/
+
+# Arquivos objeto compilados
+*.o
+
+# Pasta de documentos
+Documentos/
+
+# Arquivos executáveis (opcional)
+*.exe
+*.out
+
+# Arquivos temporários do sistema
+.DS_Store
+Thumbs.db
+
+# Arquivos de backup
+*~
+*.bak
+*.swp
+*.tmp
