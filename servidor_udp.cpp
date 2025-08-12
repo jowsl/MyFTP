@@ -9,13 +9,15 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include "udp_seguro.h" // Funções de envio/recebimento seguro
+
 using namespace std;
 
 constexpr int PORT = 8080;
 constexpr const char* SERVER_IP = "127.0.0.1";  // ip padrão de Localhost
 constexpr int TAM_BUFFER = 1024;
 
-int main(int argc, char const *argv[])
+int main()
 {
 
     // criando socket

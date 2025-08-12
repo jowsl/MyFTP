@@ -10,7 +10,7 @@
 #include <cerrno> // para usar errno
 #include <vector> // para usar vector como buffer
 
-#include "udp_seguro.cpp" // funções de envio/recebimento seguro
+#include "udp_seguro.h" // funções de envio/recebimento seguro
 
 constexpr int PORT = 8080; // Porta d
 constexpr int TAM_BUFFER = 1024;
@@ -19,7 +19,7 @@ constexpr const char* SERVER_IP = "127.0.0.1"; //localhost padrão
 using namespace std;
 
 
-int main(int argc, char const *argv[]){
+int main(){
     
     int socket_cliente = socket(AF_INET, SOCK_DGRAM, 0); // socket
 

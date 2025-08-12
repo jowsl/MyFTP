@@ -1,9 +1,11 @@
 #include "protocolo.h" // onde esta a struct Pacote
+#include "udp_seguro.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <cstring>
 #include <unistd.h>
 #include <iostream>
+
 
 constexpr int TIMEOUT = 1; //timeout que vamos usar no select()
 

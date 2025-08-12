@@ -1,5 +1,4 @@
-#ifndef PROTOCOLO_H
-#define PROTOCOLO_H
+#pragma once
 #include <cstdint> 
 /* 
     Essa biblioteca (cstdint) permite que possamos usar tipos de dados inteiros com tamanhos fixos,
@@ -30,6 +29,3 @@ struct Pacote {
     // ID unico do pacote, tamanho dos dados e flag de controle.
     char dados[TAM_DADOS]; //Dados em si, em char por ser 1byte por caractere.
 };
-
-
-#endif // PROTOCOLO_H
