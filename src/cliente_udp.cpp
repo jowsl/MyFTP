@@ -36,39 +36,46 @@ int main(){
 
     cout << "Cliente UDP iniciado. sair para finalizar" << endl;
 
-    while (true){
+    uint32_t id_sequencia = 1; //contador de sequência
+
+    while (true) {
+        cout << "> ";
+        string comando;
+        getline(cin, comando);
+
+        if (comando.empty()) continue;
+
+        if (comando == "...") {
+            std::string texto_longo;
+            for (int i = 0; i < 150; ++i) {
+                texto_longo += "0123456789";
+            }
+            comando = texto_longo; // substitui o comando por um texto longo
+        }
+
+        // função para enviar dados que vai chamr o envio seguro
+        uint32_t ultimo_id = enviar_dados(socket_cliente, server_addr, id_sequencia, comando);
+        //construção do pacote
+        if (ultimo_id > 0) {
+        id_sequencia = ultimo_id + 1; //atualiza id para o próximo envio
+
+        if (comando == "sair") break;
+
+        //função para receber dados que vai chamar o recebimento seguro
+        string resposta_servidor;
+        struct sockaddr_in remetente;
+        cout << "Aguardando resposta do servidor..." << endl;
         
-        cout << "Digite a mensagem: ";
-        string input;
-        getline(cin, input); // Lê a linha inteira, incluindo espaços
-
-        // envio
-        // parametros: socket, dados a serem enviados, tamanho dos dados, flags (0), endereço do servidor e tamanho do endereço do servidor.
-        // o c_str() converte a string para um ponteiro de char, necessário para o sendto.
-        ssize_t bytes_enviados = sendto(socket_cliente, input.c_str(), input.size(), 0,
-                                       (const struct sockaddr *)&server_addr, sizeof(server_addr));
-        
-        if (bytes_enviados < 0) {
-            perror("Erro nada enviado");
-            continue;
+        if (receber_dados(socket_cliente, resposta_servidor, remetente)) {
+            cout << "Servidor: " << resposta_servidor << endl;
+        } else {
+            cout << "Falha ao receber a resposta." << endl;
         }
 
-        if (input == "sair") {
-            cout << "Cliente encerrado." << endl;
-            break;
-        }
-
-        // Dados recebidos
-        vector<char> buffer(TAM_BUFFER);
-        ssize_t bytes_recebidos = recvfrom(socket_cliente, buffer.data(), buffer.size(), 0, NULL, NULL);
-
-        if (bytes_recebidos < 0) {
-            perror("Erro ao receber a resposta");
-        }
-        string resposta(buffer.data(), bytes_recebidos);
-        cout << "Servidor: " << resposta << endl;
-    
+    } else {
+        cout << "Falha ao enviar o comando para o servidor." << endl;
     }
+}
 
     close(socket_cliente); // fecha o socket
     return 0;

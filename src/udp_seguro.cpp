@@ -32,7 +32,6 @@ bool envio_seguro(int socket, const struct sockaddr_in& endereco, const Pacote& 
         fd_set read_fds; // conjunto de sockets para ler
         FD_ZERO(&read_fds); // limpa o conjunto de sockets
         FD_SET(socket, &read_fds); // adiciona o socket ao conjunto
-        // agora o select sabe que deve esperar por dados nesse socket
 
         // por quando tempo o select vai esperar a resposta
         struct timeval timeout;
@@ -41,6 +40,7 @@ bool envio_seguro(int socket, const struct sockaddr_in& endereco, const Pacote& 
 
         //parametros do select: número máximo de sockets + 1, conjunto de leitura, conjunto de escrita (NULL),
         // conjunto de exceção (NULL), e o timeout.
+        // oque o select faz é esperar até que o socket esteja pronto para leitura ou até que o timeout ocorra.
         int resultado = select(socket + 1, &read_fds, NULL, NULL, &timeout);
         
         if (resultado < 0) {
@@ -86,15 +86,18 @@ bool recebimento_seguro(int socket, Pacote& pacote_recebido, struct sockaddr_in&
 
     ssize_t bytes_recebidos = recvfrom(socket, &pacote_recebido, sizeof(pacote_recebido), 0,
                                        (struct sockaddr *)&endereco_remetente, &tam_remetente);
+        // recvfrom é usado para receber dados de um socket UDP.
 
-    if (bytes_recebidos <= 0) {
-        // Erro ou socket fechado
-        return false;
-    }
+    if (bytes_recebidos <= 0) return false; // Erro ou socket fechado
+
+    // precisamos verificar se o pacote recebido é um pacote de dados ou controle
+    bool eh_pacote_de_dados = pacote_recebido.flag & FLAG_DADOS;
+    bool eh_pacote_final = pacote_recebido.flag & FLAG_FINAL;
 
     // Verifica se o pacote recebido é um pacote de DADOS
-    if (pacote_recebido.flag & FLAG_DADOS) {
-        std::cout << "[recebimento_seguro] Pacote de DADOS " << pacote_recebido.id << " recebido. Enviando ACK..." << std::endl;
+    if (eh_pacote_de_dados || eh_pacote_final) {
+        std::cout << "------------------------------------------------------" << std::endl;
+        std::cout << "[recebimento_seguro] Pacote ID " << pacote_recebido.id << " recebido. Enviando ACK..." << std::endl;
 
         // monta o pacote de confirmação
         Pacote pacote_confirmacao;
@@ -111,5 +114,70 @@ bool recebimento_seguro(int socket, Pacote& pacote_recebido, struct sockaddr_in&
     }
 
     // Retornamos false, nenhum dado chegou.
+    return false;
+}
+
+// Esta função envia uma string completa, fatiando-a em pacotes se necessário.
+// Retorna o ID do último pacote enviado ou 0 se falhar
+uint32_t enviar_dados(int socket, const struct sockaddr_in& endereco, uint32_t id_inicial, const std::string& dados_completos) {
+    size_t ponteiro = 0;
+    uint32_t id_atual = id_inicial;
+
+    // Loop enquanto houver dados restantes
+    while (ponteiro < dados_completos.length()) {
+        Pacote pacote_atual;
+        memset(&pacote_atual, 0, sizeof(pacote_atual));
+        pacote_atual.id = id_atual;
+        pacote_atual.flag = FLAG_DADOS;
+
+        size_t tamanho_fatia = std::min((size_t)TAM_DADOS, dados_completos.length() - ponteiro);
+        pacote_atual.tamanho = tamanho_fatia;
+        memcpy(pacote_atual.dados, dados_completos.c_str() + ponteiro, tamanho_fatia);
+        // memcpy copia os dados da string para o pacote, respeitando o tamanho máximo de TAM_DADOS.
+        // parâmetros: ponteiro de destino, ponteiro de origem, número de bytes a copiar.
+        
+        // caso o envio falhe, retornamos 0
+        if (!envio_seguro(socket, endereco, pacote_atual)) {
+            std::cerr << "Falha ao enviar fatia " << id_atual << std::endl;
+            return 0;
+        }
+        ponteiro += tamanho_fatia;// o ponteiro vai incrementando para a próxima fatia
+        id_atual++; // igual para o id do pacote
+    }
+
+    // Envia um pacote com a flag FINAL
+    Pacote pacote_final;
+    memset(&pacote_final, 0, sizeof(pacote_final));
+    pacote_final.id = id_atual;
+    pacote_final.flag = FLAG_FINAL;
+    pacote_final.tamanho = 0;
+
+    if (!envio_seguro(socket, endereco, pacote_final)) {
+        std::cerr << "Falha ao enviar o pacote FLAG_FINAL." << std::endl;
+        return 0;
+    }
+
+    std::cout << "[enviar_dados] Transferencia concluida com sucesso." << std::endl;
+    return id_atual;
+}
+
+// Esta função recebe pacotes de dados e os monta em uma string completa.
+ // Retorna true se a transferência foi concluída com sucesso (pacote FINAL recebido).
+ // Retorna false se não conseguir receber os dados.
+bool receber_dados(int socket, std::string& dados_remontados, struct sockaddr_in& remetente) {
+    dados_remontados.clear(); // Limpa a string para receber novos dados
+
+    while (true) {
+        Pacote pacote_recebido;
+
+        if (recebimento_seguro(socket, pacote_recebido, remetente)) {
+            if (pacote_recebido.flag & FLAG_DADOS) {
+                dados_remontados.append(pacote_recebido.dados, pacote_recebido.tamanho);
+            } else if (pacote_recebido.flag & FLAG_FINAL) {
+                std::cout << "[receber_dados] Pacote final recebido. Transferencia completa." << std::endl;
+                return true;
+            }
+        }
+    }
     return false;
 }
