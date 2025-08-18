@@ -1,0 +1,3 @@
+# lista com nome de usuários, formato: <usuario> <senha>
+teste senha123
+jouberth 0099
