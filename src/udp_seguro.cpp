@@ -86,7 +86,7 @@ bool recebimento_seguro(int socket, Pacote& pacote_recebido, struct sockaddr_in&
 
     ssize_t bytes_recebidos = recvfrom(socket, &pacote_recebido, sizeof(pacote_recebido), 0,
                                        (struct sockaddr *)&endereco_remetente, &tam_remetente);
-        // recvfrom é usado para receber dados de um socket UDP.
+    // recvfrom é usado para receber dados de um socket UDP.
 
     if (bytes_recebidos <= 0) return false; // Erro ou socket fechado
 
@@ -97,7 +97,7 @@ bool recebimento_seguro(int socket, Pacote& pacote_recebido, struct sockaddr_in&
     // Verifica se o pacote recebido é um pacote de DADOS
     if (eh_pacote_de_dados || eh_pacote_final) {
         std::cout << "------------------------------------------------------" << std::endl;
-        std::cout << "[recebimento_seguro] Pacote ID " << pacote_recebido.id << " recebido. Enviando ACK..." << std::endl;
+        std::cout << "[recebimento_seguro] Pacote ID " << pacote_recebido.id << " recebido. Enviando resposta..." << std::endl;
 
         // monta o pacote de confirmação
         Pacote pacote_confirmacao;

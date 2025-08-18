@@ -14,7 +14,7 @@
 
 constexpr int PORT = 8080; // Porta d
 constexpr int TAM_BUFFER = 1024;
-constexpr const char* SERVER_IP = "127.0.0.1"; //localhost padrão
+constexpr const char* SERVER_IP = "127.0.0.1"; //localhost 
 
 using namespace std;
 
@@ -36,7 +36,7 @@ int main(){
 
     cout << "Cliente UDP iniciado. sair para finalizar" << endl;
 
-    uint32_t id_sequencia = 1; //contador de sequência
+    uint32_t id_sequencia = 1; //contador de sequência para os pacotes enviados
 
     while (true) {
         cout << "> ";
@@ -77,6 +77,6 @@ int main(){
     }
 }
 
-    close(socket_cliente); // fecha o socket
+    close(socket_cliente);
     return 0;
 }
