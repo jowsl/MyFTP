@@ -69,6 +69,11 @@ bool envio_seguro(int socket, const struct sockaddr_in& endereco, const Pacote& 
                     if ((confirmacao_recebido.flag & FLAG_CONTROLE) && (confirmacao_recebido.id == dados.id)) {
                         std::cout << "[envio_seguro] pacote:  " << dados.id << " recebido com sucesso!" << std::endl;
                         return true; // certo
+                    } else if ((confirmacao_recebido.flag & FLAG_CONTROLE) && (confirmacao_recebido.id < dados.id)) {
+                        // Recebeu um ACK para um pacote anterior, reenvia o pacote atual
+                        std::cout << "[envio_seguro] ACK para pacote anterior recebido. Reenviando pacote " << dados.id << std::endl;
+                        tentativas--;
+                        continue;
                     } else {
                         // Recebeu um pacote errado
                         std::cout << "[envio_seguro] Pacote errado recebido. Ignorando." << std::endl;
@@ -176,6 +181,9 @@ bool receber_dados(int socket, std::string& dados_remontados, struct sockaddr_in
             } else if (pacote_recebido.flag & FLAG_FINAL) {
                 std::cout << "[receber_dados] Pacote final recebido. Transferencia completa." << std::endl;
                 return true;
+            } else if (pacote_recebido.flag & FLAG_CONTROLE) {
+                // Ignora ACKs recebidos aqui, eles são tratados por envio_seguro
+                continue;
             }
         }
     }

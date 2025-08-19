@@ -34,6 +34,8 @@ int main() {
     std::cout << "Cliente MyFTP conectado. Digite um comando (login, ls, cd, get, put, sair)." << std::endl;
 
     uint32_t id_sequencia = 1;
+    bool primeira_conexao = true;
+    struct sockaddr_in endereco_servidor_dedicado = server_addr;
 
     while (true) {
         std::cout << "> ";
@@ -42,26 +44,40 @@ int main() {
 
         if (linha_comando.empty()) continue;
 
-        // Parseia o comando e o argumento digitado pelo usuário
         std::stringstream ss(linha_comando);
         std::string str_comando, argumento;
         ss >> str_comando;
         std::getline(ss >> std::ws, argumento);
 
-        // Lógica especial para 'put': precisamos ler o arquivo ANTES de enviar
         if (str_comando == "put") {
+            // --- INÍCIO DA NOVA LÓGICA PARA O 'PUT' ---
             if (argumento.empty()) {
-                std::cout << "Uso: put <arquivo_local>" << std::endl;
-                continue;
-            }
-            if (!std::filesystem::exists(argumento)) {
-                std::cerr << "ERRO: Arquivo local '" << argumento << "' não encontrado." << std::endl;
+                std::cout << "ERRO: Uso: put <arquivo_local> [nome_remoto_opcional]" << std::endl;
                 continue;
             }
 
-            // 1. Envia o comando 'put' inicial para o servidor
-            std::cout << "Iniciando 'put' para o arquivo: " << argumento << std::endl;
-            uint32_t ultimo_id = enviar_dados(socket_cliente, server_addr, id_sequencia, linha_comando);
+            std::stringstream args_ss(argumento);
+            std::string arquivo_local, nome_remoto;
+
+            args_ss >> arquivo_local;
+            args_ss >> nome_remoto;
+
+            if (nome_remoto.empty()) {
+                nome_remoto = std::filesystem::path(arquivo_local).filename().string();
+            }
+
+            if (!std::filesystem::exists(arquivo_local)) {
+                std::cerr << "ERRO: Arquivo local '" << arquivo_local << "' não encontrado." << std::endl;
+                continue;
+            }
+
+            // 1. Monta e envia o comando 'put' limpo para o servidor
+            std::string comando_para_servidor = "put " + nome_remoto;
+            std::cout << "Enviando comando para criar '" << nome_remoto << "' no servidor..." << std::endl;
+            // Garante que o comando seja enviado para o endereço correto (principal ou dedicado)
+            struct sockaddr_in endereco_destino = primeira_conexao ? server_addr : endereco_servidor_dedicado;
+            uint32_t ultimo_id = enviar_dados(socket_cliente, endereco_destino, id_sequencia, comando_para_servidor);
+
             if (!ultimo_id) {
                 std::cerr << "Falha ao enviar comando 'put' para o servidor." << std::endl;
                 continue;
@@ -72,42 +88,56 @@ int main() {
             std::string resposta_ok;
             struct sockaddr_in remetente;
             if (receber_dados(socket_cliente, resposta_ok, remetente) && resposta_ok == "OK") {
-                // 3. Servidor está pronto, agora envia o conteúdo do arquivo
-                std::cout << "Servidor pronto. Enviando conteúdo do arquivo..." << std::endl;
-                std::ifstream arquivo_local(argumento, std::ios::binary);
+                 if (primeira_conexao) {
+                    endereco_servidor_dedicado = remetente;
+                    primeira_conexao = false;
+                    std::cout << "Conectado ao socket dedicado na porta: " << ntohs(remetente.sin_port) << std::endl;
+                }
+
+                // 3. Servidor está pronto, envia o conteúdo do arquivo
+                std::cout << "Servidor pronto. Enviando conteúdo de '" << arquivo_local << "'..." << std::endl;
+                std::ifstream stream_arquivo_local(arquivo_local, std::ios::binary);
                 std::stringstream buffer_arquivo;
-                buffer_arquivo << arquivo_local.rdbuf();
+                buffer_arquivo << stream_arquivo_local.rdbuf();
                 
-                ultimo_id = enviar_dados(socket_cliente, server_addr, id_sequencia, buffer_arquivo.str());
+                ultimo_id = enviar_dados(socket_cliente, endereco_servidor_dedicado, id_sequencia, buffer_arquivo.str());
                 if (ultimo_id > 0) {
                     id_sequencia = ultimo_id + 1;
-                    // 4. Espera a confirmação final do servidor
+                    
                     std::string resposta_final;
                     if(receber_dados(socket_cliente, resposta_final, remetente)) {
                         std::cout << "Servidor: " << resposta_final << std::endl;
+                    } else {
+                        std::cerr << "ERRO: Não recebeu confirmação final do servidor." << std::endl;
                     }
                 } else {
-                    std::cerr << "Falha ao enviar o conteúdo do arquivo." << std::endl;
+                    std::cerr << "ERRO: Falha ao enviar o conteúdo do arquivo." << std::endl;
                 }
             } else {
-                std::cerr << "Servidor não confirmou o recebimento do comando 'put'. Resposta: " << resposta_ok << std::endl;
+                std::cerr << "ERRO: Servidor não confirmou o comando 'put'. Resposta: " << resposta_ok << std::endl;
             }
-        } 
-        else { // Lógica para todos os outros comandos (ls, get, cd, login, sair, etc)
-            uint32_t ultimo_id = enviar_dados(socket_cliente, server_addr, id_sequencia, linha_comando);
+            // --- FIM DA NOVA LÓGICA PARA O 'PUT' ---
+        } else { // Lógica para todos os outros comandos
+            struct sockaddr_in endereco_destino = primeira_conexao ? server_addr : endereco_servidor_dedicado;
+
+            uint32_t ultimo_id = enviar_dados(socket_cliente, endereco_destino, id_sequencia, linha_comando);
 
             if (ultimo_id > 0) {
                 id_sequencia = ultimo_id + 1;
 
                 if (str_comando == "sair") break;
 
-                // Espera a resposta (pode ser uma lista de arquivos, o conteúdo de um arquivo, etc.)
                 std::string resposta_servidor;
                 struct sockaddr_in remetente;
                 std::cout << "Aguardando resposta do servidor..." << std::endl;
 
                 if (receber_dados(socket_cliente, resposta_servidor, remetente)) {
-                    // Lógica especial para 'get': salvar a resposta em um arquivo
+                    if (primeira_conexao) {
+                        endereco_servidor_dedicado = remetente;
+                        primeira_conexao = false;
+                        std::cout << "Conectado ao socket dedicado na porta: " << ntohs(remetente.sin_port) << std::endl;
+                    }
+
                     if (str_comando == "get" && resposta_servidor.rfind("ERRO:", 0) != 0) {
                         std::ofstream arquivo_saida(argumento, std::ios::binary);
                         if(arquivo_saida.is_open()) {
@@ -118,7 +148,6 @@ int main() {
                             std::cerr << "ERRO: Nao foi possivel criar o arquivo '" << argumento << "' localmente." << std::endl;
                         }
                     } else {
-                        // Para todos os outros comandos (ls, cd, erros do get), apenas imprime a resposta
                         std::cout << "Servidor:\n" << resposta_servidor << std::endl;
                     }
                 } else {
